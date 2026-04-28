@@ -1,0 +1,6 @@
+{
+  "name": "Iglesias de Cuba",
+  "description": "Mapa interactivo de iglesias en Cuba con información detallada de pastores y contacto.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": []
+}

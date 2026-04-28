@@ -1,0 +1,54 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        request.auth.token.email == 'norieltextusa@gmail.com' && request.auth.token.email_verified == true
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidChurch(data) {
+      return data.keys().hasAll(['name', 'pastor', 'address', 'lat', 'lng', 'createdBy', 'createdAt', 'updatedAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() <= 200 &&
+             data.pastor is string && data.pastor.size() > 0 && data.pastor.size() <= 200 &&
+             data.address is string && data.address.size() > 0 && data.address.size() <= 500 &&
+             data.lat is number && data.lng is number &&
+             data.createdBy == request.auth.uid &&
+             data.createdAt == request.time &&
+             data.updatedAt == request.time;
+    }
+
+    match /churches/{churchId} {
+      allow read: if true;
+      allow create: if isAdmin() && isValidId(churchId) && isValidChurch(incoming());
+      allow update: if isAdmin() && isValidId(churchId) && 
+                      incoming().updatedAt == request.time &&
+                      incoming().createdAt == existing().createdAt &&
+                      incoming().createdBy == existing().createdBy &&
+                      incoming().diff(existing()).affectedKeys().hasAny(['name', 'pastor', 'address', 'phone', 'email', 'details', 'lat', 'lng', 'denomination', 'updatedAt']);
+      allow delete: if isAdmin();
+    }
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "entities": {
+    "Church": {
+      "title": "Church",
+      "description": "Information about a church in Cuba",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "Name of the church" },
+        "pastor": { "type": "string", "description": "Name of the pastor" },
+        "address": { "type": "string", "description": "Physical address" },
+        "phone": { "type": "string", "description": "Contact phone number" },
+        "email": { "type": "string", "description": "Contact email" },
+        "details": { "type": "string", "description": "Other relevant details" },
+        "lat": { "type": "number", "description": "Latitude" },
+        "lng": { "type": "number", "description": "Longitude" },
+        "denomination": { "type": "string", "description": "Religious denomination" },
+        "province": { "type": "string", "description": "Province in Cuba" },
+        "createdBy": { "type": "string", "description": "User ID of the creator" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Last update timestamp" }
+      },
+      "required": ["name", "pastor", "address", "lat", "lng", "createdBy"]
+    }
+  },
+  "firestore": {
+    "/churches/{churchId}": {
+      "schema": "Church",
+      "description": "Collection of churches in Cuba"
+    }
+  }
+}
