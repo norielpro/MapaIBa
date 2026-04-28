@@ -7,13 +7,28 @@ import React, { useState, useEffect } from 'react';
 import CubaMap from './components/Map';
 import ChurchDetails from './components/ChurchCard';
 import AdminPanel from './components/AdminPanel';
-import { Church } from './types';
-import { auth, loginWithGoogle } from './lib/firebase';
+import { Church, OperationType } from './types';
+import { auth, loginWithGoogle, handleFirestoreError } from './lib/firebase';
 import { onAuthStateChanged, User, signOut } from 'firebase/auth';
-import { LogIn, LogOut, Plus, Map as MapIcon, Search, Menu, User as UserIcon, X } from 'lucide-react';
+import { LogIn, LogOut, Plus, Map as MapIcon, Search, Menu, User as UserIcon, X, Navigation, Radar } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { collection, getDocs, onSnapshot } from 'firebase/firestore';
+import { db } from './lib/firebase';
 
 const ADMIN_EMAIL = 'norieltextusa@gmail.com';
+
+// Haversine formula to calculate distance between two points in km
+function getDistance(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371; // Earth's radius in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+    Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
 
 export default function App() {
   const [selectedChurch, setSelectedChurch] = useState<Church | null>(null);
@@ -21,23 +36,85 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [tempCoords, setTempCoords] = useState<{ lat: number, lng: number } | null>(null);
+  const [isFindingNearest, setIsFindingNearest] = useState(false);
+  const [churches, setChurches] = useState<Church[]>([]);
 
   const [filteredProvince, setFilteredProvince] = useState<string | null>(null);
 
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (u) => {
+    const unsubAuth = onAuthStateChanged(auth, (u) => {
       setUser(u);
     });
-    return () => unsub();
+
+    const unsubChurches = onSnapshot(collection(db, 'churches'), (snapshot) => {
+      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Church));
+      setChurches(data);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.LIST, 'churches');
+    });
+
+    return () => {
+      unsubAuth();
+      unsubChurches();
+    };
   }, []);
 
   const isAdmin = user?.email === ADMIN_EMAIL;
+
+  const totalChurches = churches.length;
+  const totalMissions = churches.filter(c => 
+    c.name.toLowerCase().includes('misión') || 
+    c.denomination?.toLowerCase().includes('misión')
+  ).length;
 
   const handleMapClick = (lat: number, lng: number) => {
     if (isAdmin) {
       setTempCoords({ lat, lng });
       setIsAdminPanelOpen(true);
     }
+  };
+
+  const findNearestChurch = () => {
+    if (!navigator.geolocation) {
+      alert("La geolocalización no es compatible con tu navegador.");
+      return;
+    }
+
+    setIsFindingNearest(true);
+    navigator.geolocation.getCurrentPosition(async (position) => {
+      const { latitude, longitude } = position.coords;
+      
+      try {
+        const querySnapshot = await getDocs(collection(db, 'churches'));
+        const churches = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Church));
+        
+        if (churches.length === 0) {
+          alert("No hay iglesias registradas en el mapa.");
+          return;
+        }
+
+        let nearest = churches[0];
+        let minDistance = getDistance(latitude, longitude, nearest.lat, nearest.lng);
+
+        churches.forEach(church => {
+          const d = getDistance(latitude, longitude, church.lat, church.lng);
+          if (d < minDistance) {
+            minDistance = d;
+            nearest = church;
+          }
+        });
+
+        setSelectedChurch(nearest);
+      } catch (err) {
+        console.error("Error finding churches:", err);
+      } finally {
+        setIsFindingNearest(false);
+      }
+    }, (error) => {
+      console.error(error);
+      alert("No se pudo obtener tu ubicación.");
+      setIsFindingNearest(false);
+    });
   };
 
   const provinces = ['Pinar del Río', 'Artemisa', 'La Habana', 'Mayabeque', 'Matanzas', 'Villa Clara', 'Cienfuegos', 'Sancti Spíritus', 'Ciego de Ávila', 'Camagüey', 'Las Tunas', 'Holguín', 'Granma', 'Santiago de Cuba', 'Guantánamo', 'Isla de la Juventud'];
@@ -113,8 +190,17 @@ export default function App() {
 
       {/* Main Content Area */}
       <main className="flex-1 relative flex flex-col h-full bg-[#0F0F0F]">
-        {/* Floating Search / Header (Mobile) */}
+        {/* Quick Filter */}
         <div className="absolute top-8 right-8 z-30 flex items-center gap-4">
+          <button 
+            onClick={findNearestChurch}
+            disabled={isFindingNearest}
+            className="flex items-center gap-2 bg-primary hover:bg-primary-hover text-white px-5 py-3 rounded-2xl shadow-2xl font-bold transition-all disabled:opacity-50"
+          >
+            {isFindingNearest ? <Radar className="animate-pulse" size={20} /> : <Navigation size={20} />}
+            <span className="hidden sm:inline">Más cercana</span>
+          </button>
+
           <div className="hidden md:flex bg-dark-card/90 backdrop-blur-md border border-dark-border rounded-full px-4 py-2 items-center gap-3 shadow-2xl">
             <Search className="w-4 h-4 text-dark-muted" />
             <input 
@@ -156,12 +242,12 @@ export default function App() {
            <div className="bg-dark-card/90 backdrop-blur-md px-6 py-4 rounded-2xl border border-dark-border shadow-2xl flex items-center gap-6">
               <div className="flex flex-col">
                 <span className="text-[10px] font-bold text-dark-muted uppercase tracking-widest">Iglesias</span>
-                <span className="text-xl font-bold text-white leading-none">124</span>
+                <span className="text-xl font-bold text-white leading-none">{totalChurches}</span>
               </div>
               <div className="w-px h-8 bg-dark-border"></div>
               <div className="flex flex-col">
                 <span className="text-[10px] font-bold text-dark-muted uppercase tracking-widest">Misiones</span>
-                <span className="text-xl font-bold text-white leading-none">42</span>
+                <span className="text-xl font-bold text-white leading-none">{totalMissions}</span>
               </div>
            </div>
         </div>
@@ -177,6 +263,7 @@ export default function App() {
         {/* The Map */}
         <div className="flex-1 w-full h-full">
           <CubaMap 
+            churches={churches}
             onSelectChurch={setSelectedChurch} 
             onMapClick={isAdmin ? handleMapClick : undefined}
             tempPoint={tempCoords}
@@ -207,6 +294,7 @@ export default function App() {
           <ChurchDetails 
             church={selectedChurch} 
             onClose={() => setSelectedChurch(null)} 
+            isAdmin={isAdmin}
           />
         )}
       </AnimatePresence>

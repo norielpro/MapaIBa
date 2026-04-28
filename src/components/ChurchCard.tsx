@@ -1,14 +1,28 @@
 import React from 'react';
-import { Church } from '../types';
-import { X, Phone, Mail, MapPin, User, Info, MessageSquare, Map as MapIcon } from 'lucide-react';
+import { Church, OperationType } from '../types';
+import { db, handleFirestoreError } from '../lib/firebase';
+import { deleteDoc, doc } from 'firebase/firestore';
+import { X, Phone, Mail, MapPin, User, Info, MessageSquare, Map as MapIcon, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 
 interface ChurchDetailsProps {
   church: Church;
   onClose: () => void;
+  isAdmin?: boolean;
 }
 
-export default function ChurchDetails({ church, onClose }: ChurchDetailsProps) {
+export default function ChurchDetails({ church, onClose, isAdmin }: ChurchDetailsProps) {
+  const handleDelete = async () => {
+    if (!window.confirm(`¿Estás seguro de que deseas eliminar "${church.name}"?`)) return;
+    
+    try {
+      await deleteDoc(doc(db, 'churches', church.id));
+      onClose();
+    } catch (error) {
+      handleFirestoreError(error, OperationType.DELETE, `churches/${church.id}`);
+    }
+  };
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -20,12 +34,23 @@ export default function ChurchDetails({ church, onClose }: ChurchDetailsProps) {
       <div className="bg-[#1A1A1A]/95 backdrop-blur-md border border-white/10 rounded-[2.5rem] shadow-2xl overflow-hidden ring-1 ring-white/10 pointer-events-auto">
         {/* Header with gradient */}
         <div className="h-28 bg-gradient-to-br from-blue-600/20 to-purple-600/20 relative flex items-center justify-center border-b border-white/5">
-          <button 
-            onClick={onClose}
-            className="absolute top-4 right-4 p-2 bg-black/40 hover:bg-black/60 rounded-full transition-colors text-white"
-          >
-            <X size={18} />
-          </button>
+          <div className="absolute top-4 right-4 flex gap-2">
+            {isAdmin && (
+              <button 
+                onClick={handleDelete}
+                className="p-2 bg-red-600/20 hover:bg-red-600 text-red-500 hover:text-white rounded-full transition-all border border-red-500/20"
+                title="Eliminar iglesia"
+              >
+                <Trash2 size={18} />
+              </button>
+            )}
+            <button 
+              onClick={onClose}
+              className="p-2 bg-black/40 hover:bg-black/60 rounded-full transition-colors text-white"
+            >
+              <X size={18} />
+            </button>
+          </div>
           <div className="bg-[#1A1A1A] p-4 rounded-2xl border border-white/10 shadow-lg">
              <MessageSquare size={32} className="text-blue-500" />
           </div>

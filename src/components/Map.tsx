@@ -1,13 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
+import React from 'react';
+import { MapContainer, TileLayer, Marker, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
 import { Church } from '../types';
-import { db, handleFirestoreError } from '../lib/firebase';
-import { collection, onSnapshot } from 'firebase/firestore';
-import { OperationType } from '../types';
-import { Church as ChurchIcon, Phone, Mail, MapPin, User, Info } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-
 // Fix for default marker icons in Leaflet + Vite
 const customIcon = L.divIcon({
   className: 'custom-marker',
@@ -37,26 +31,14 @@ function MapEvents({ onMapClick }: { onMapClick: (lat: number, lng: number) => v
 }
 
 interface MapViewProps {
+  churches: Church[];
   onSelectChurch: (church: Church | null) => void;
   onMapClick?: (lat: number, lng: number) => void;
   tempPoint?: { lat: number, lng: number } | null;
   provinceFilter?: string | null;
 }
 
-export default function CubaMap({ onSelectChurch, onMapClick, tempPoint, provinceFilter }: MapViewProps) {
-  const [churches, setChurches] = useState<Church[]>([]);
-
-  useEffect(() => {
-    const unsub = onSnapshot(collection(db, 'churches'), (snapshot) => {
-      const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Church));
-      setChurches(data);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'churches');
-    });
-
-    return () => unsub();
-  }, []);
-
+export default function CubaMap({ churches, onSelectChurch, onMapClick, tempPoint, provinceFilter }: MapViewProps) {
   const filteredChurches = provinceFilter 
     ? churches.filter(c => c.province === provinceFilter)
     : churches;
